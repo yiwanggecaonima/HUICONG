@@ -23,27 +23,28 @@ import ssl
 import socket
 from socket import error as SocketError
 import errno
-urllib3.disable_warnings()
-socket.setdefaulttimeout(8)
-requests.adapters.DEFAULT_RETRIES = 3
+urllib3.disable_warnings()　# 取出urllib3　警告
+socket.setdefaulttimeout(8)　# 全局超时时间
+requests.adapters.DEFAULT_RETRIES = 3　# requests　重试次数
 # requests.packages.urllib3.util.ssl_.DEFAULT_CIPHERS += 'HIGH:!DH:!aNULL'
 # requests.packages.urllib3.contrib.pyopenssl.DEFAULT_SSL_CIPHER_LIST += 'HIGH:!DH:!aNULL'
-PROXY_POOL_URL = 'http://webapi.http.zhimacangku.com/getip?num=1&type=1&pro=0&city=0&yys=0&port=1&pack=38903&ts=0&ys=0&cs=0&lb=1&sb=0&pb=45&mr=1&regions=370000,440000'
-MAX_COUNT = 5
+PROXY_POOL_URL = ''  #芝麻代理url
+MAX_COUNT = 5     #最大重试次数
 # socks.set_default_proxy(socks.PROXY_TYPE_HTTP, '182.247.36.105',4273)
 # socket.socket = socks.socksocket
 
-r = Redis(host='47.107.137.63', port=6379, db=10,password='caonima',decode_responses=True)
+r = Redis(host='', port=6379, db=10,password='',decode_responses=True)　　#阿里云作为主机进行出队列
 print(r.keys())
-proxy = '115.153.167.53:1659'
-client = pymongo.MongoClient('47.107.137.63',27017)
+proxy = None
+client = pymongo.MongoClient('',27017)　　# 阿里云存储数据
 db = client['scrapy_hc']
 headers = {'User_Agent': random.choice(UA),
-           'Connection': 'close'}
+           'Connection': 'close'}　　　# 如果不加close,这玩意会经常有最大连接数错误，实际上加了也有，但是好像变少了
 
+# 获取芝麻代理ip
 def get_proxy():
     try:
-        request = urllib.request.Request("http://webapi.http.zhimacangku.com/getip?num=1&type=1&pro=&city=0&yys=0&port=11&pack=39397&ts=0&ys=0&cs=0&lb=1&sb=0&pb=4&mr=1&regions=", headers=headers)
+        request = urllib.request.Request(PROXY_POOL_URL, headers=headers)
         response = urllib.request.urlopen(request)
         data = response.read().decode()
         response.close()
@@ -53,7 +54,7 @@ def get_proxy():
             ret = re.compile(r'请将(.*)设置为白名单')
             ip = re.findall(ret, data)[0]
             print(ip, type(ip))
-            white_ip = 'http://web.http.cnapi.cc/index/index/save_white?neek=60658&appkey=c76d3c1fddc89df92151a2cfb6388a5f&white=' + ip
+            white_ip = '...&white=' + ip
             result = requests.get(white_ip, headers=headers)
             if '保存成功' in result.text:
                 print('白名单保存成功')
@@ -62,7 +63,7 @@ def get_proxy():
             ret = re.compile(r'请检测您现在的(.*)是否在套餐')
             ip = re.findall(ret, data)[0]
             print(ip, type(ip))
-            white_ip = 'http://web.http.cnapi.cc/index/index/save_white?neek=60658&appkey=c76d3c1fddc89df92151a2cfb6388a5f&white=' + ip
+            white_ip = '...f&white=' + ip
             result = requests.get(white_ip, headers=headers)
             if '保存成功' in result.text:
                 print('白名单保存成功')
@@ -70,9 +71,8 @@ def get_proxy():
         return ip_port
 
     except URLError as e:
-        print("wait ......")
+        print("wait ......")  #如果出现这个异常就是socket error 104   因为使用的socket全局代理，至于为什么不用requests或者urllib代理，下面说
         exit()
-
         # time.sleep(150)
         # get_proxy()
 
@@ -107,9 +107,9 @@ def get_html(url,count=1):
             print('页面跳转')
             time.sleep(2)
             res = requests.get(response.url,allow_redirects=False,headers=headers,timeout=5)
-            if res.status_code == 404:
+            if res.status_code == 404:　#　页面找不到，不存在
                 pass
-            elif res.status_code != 200:
+            elif res.status_code != 200:　# 跳转重试一次，不行获取代理
                 proxy = get_proxy()
                 if proxy:
                     print('重新获取代理ip',proxy)
@@ -122,18 +122,18 @@ def get_html(url,count=1):
                 return res.text
         return None
     except SSLError as e:
-        print('禁止访问', e.args)
+        print('禁止访问', e.args)    # ip被封
         time.sleep(random.choice([3,4, 5, 7, 8]))
         proxy = get_proxy()
         # proxy = '127.0.0.1:1080'
         return get_html(url, count)
-    except ConnectionError as e:
+    except ConnectionError as e:  # 各种连接异常
         print('Connection Error', e.args)
         time.sleep(random.choice([3, 2, 1,]))
         proxy = get_proxy()
         count += 1
         return get_html(url, count)
-    except Timeout as e:
+    except Timeout as e:　　　# 超时检测
         print('Timeout Error', e.args)
         res = requests.get(url, allow_redirects=False, headers=headers, timeout=5)
         if res.status_code != 200:
@@ -148,7 +148,7 @@ def get_html(url,count=1):
         else:
             return res.text
 
-    except SocketError as e:
+    except SocketError as e:　　# 这个很少出现
         if e.errno != errno.ECONNRESET:
             raise
         time.sleep(3)
@@ -156,32 +156,34 @@ def get_html(url,count=1):
         # time.sleep(random.choice([4,5,6,7,8,9,10]))
         proxy = get_proxy()
         return get_html(url, count)
-    except Exception as e:
+    except Exception as e:　　
         print('xxxxxxx',e)
         time.sleep(2)
         proxy = get_proxy()
         return get_html(url, count)
 
+# 保存json文件或者其他
 def insert_json(value):
-    file = codecs.open("仪器仪表item.json", "a", encoding="utf-8")
+    file = codecs.open("item.json", "a", encoding="utf-8")
     line = json.dumps(value, ensure_ascii=False) + "," + "\n"
     file.write(line)
     file.close()
 
+# 保存mongodb
 def insert_mongo(item):
-    # if db['hc_item_家居家电'].update({'name':item['name']},{'$set': item},True):
-    if db['hc_item_智能硬件'].insert(item):
+    # if db['hc_item'].update({'name':item['name']},{'$set': item},True):
+    if db['hc_item_'].insert(item):
         print('save to mongo ',item['name'])
     else:
         print(('No to mongo'))
 
-
+# 从redis  pop出来url,这里使用的xpath解析
 def parse_urls():
     if "j_urls" in r.keys():
         while True:
-            try:
+            tr
                 datas = r.spop("j_urls")
-                string = re.sub("\'", '\"', datas)
+                string = re.sub("\'", '\"', datas)　# 注意引号　单引不能识别
                 # print(string)
                 data = json.loads(string)
                 result = get_html(data['link'])
@@ -206,24 +208,22 @@ def parse_urls():
                 tel1 = response.xpath("//div[@class='word1 part1']/div[@class='p tel1']/em/text()")
                 item['tel1'] = tel1[0].strip('：').strip(' \xa0\xa0  ') if tel1 else None
                 print(item)
-                # insert_json(item)
+                insert_json(item)
                 insert_mongo(dict(item))
                 # time.sleep(random.choice([0.5,0.6,0.7,0.8,0.9,1]))
 
-            except ValueError:
+            except ValueError:　　# 捕捉xpath结果为Ｎone
                 print("xpath结果为空！")
                 pass
-
-            except Exception as e:
-                if "j_urls" not in r.keys():
+           
+            except Exception as e:  
+                if "j_urls" not in r.keys():  #  获取url完毕
                     print("爬取结束,关闭爬虫！")
                     break
                 else:
-                    print("请求发送失败",e)
+                    print("请求发送失败",e)　　# 其他原因请求失败
                     # raise
                     continue
-        else:
-            parse_urls()
 
 
 if __name__ == '__main__':
