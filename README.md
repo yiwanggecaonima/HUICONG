@@ -1,4 +1,8 @@
 # hc-requests-redis
+proxy_test.py 是代理测试　　单个测试没有问题
+
+
+
 selenium 是获取所有的link入队列　　整个到过程分为两部分，这是第一部分
 当然也可以直接存redis也没问题
 
