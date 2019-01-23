@@ -1,8 +1,11 @@
 # hc-requests-redis
 
-proxy_test.py 是代理测试　　单个测试没有问题
+proxy_test.py 是代理测试　单个测试没有问题
+
 hc.py　是主文件
+
 config.py　是配置文件　　这里分离得比较少，可以把更多的东西写到里面去　　看个人习惯
+
 item.json  是一些抓取的数据格式
 
 
