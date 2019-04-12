@@ -181,7 +181,7 @@ def insert_mongo(item):
 def parse_urls():
     if "j_urls" in r.keys():
         while True:
-            tr
+            try:
                 datas = r.spop("j_urls")
                 string = re.sub("\'", '\"', datas)　# 注意引号　单引不能识别
                 # print(string)
